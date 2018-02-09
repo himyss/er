@@ -1,4 +1,4 @@
-void exp1803_full(Int_t nEvents = 100) {
+void exp1803_full(Int_t nEvents = 1000) {
   // --------------- Telescope T1 -------------------------------------------
   Double_t T1Dl = 0.5;         // [cm]      
   Double_t T1PosZ = 10.;       // [cm] 
@@ -139,7 +139,7 @@ void exp1803_full(Int_t nEvents = 100) {
 
   FairPrimaryGenerator* primGen = new FairPrimaryGenerator();
 
-  Double_t  kinE_MevPerNucleon = 40.;
+  Double_t  kinE_MevPerNucleon = 40.; // beam energy in MeV/nuclon
   // Int_t     Z = 1, A = 3, Q = 1;
   // TString   ionName = "3H";
   Int_t Z = 2, A = 6, Q = 2;

@@ -125,6 +125,11 @@ Bool_t ERDecayEXP1803::Stepping() {
 
       Int_t newTrackNb;
 
+      gMC->GetStack()->PushTrack(1, 0, f5H->PdgCode(),
+                                 lv5H->Px(),lv5H->Py(),lv5H->Pz(),
+                                 lv5H->E(), curPos.X(), curPos.Y(), curPos.Z(),
+                                 gMC->TrackTime(), 0., 0., 0.,
+                                 kPDecay, newTrackNb, fn->Mass(), 0);
       gMC->GetStack()->PushTrack(1, 0, f3He->PdgCode(),
                                  lv3He->Px(),lv3He->Py(),lv3He->Pz(),
                                  lv3He->E(), curPos.X(), curPos.Y(), curPos.Z(),
