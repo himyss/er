@@ -1,4 +1,4 @@
-void exp1803_full(Int_t nEvents = 1000) {
+void exp1803_full(Int_t nEvents = 100) {
   // --------------- Telescope T1 -------------------------------------------
   Double_t T1Dl = 0.5;         // [cm]      
   Double_t T1PosZ = 10.;       // [cm] 
