@@ -6,7 +6,7 @@
  *                  copied verbatim in the file "LICENSE"                       *
  ********************************************************************************/
 
-#include "ERDecay2H_6Li.h"
+#include "ERDecay2H_3He3H.h"
 
 #include <iostream>
 #include <string>
@@ -23,30 +23,35 @@ using namespace std;
 #include "FairLogger.h"
 
 #include "ERDecayMCEventHeader.h"
-#include "ER2H_6LiEventHeader.h"
+#include "ER2H_3He3HEventHeader.h"
 #include "ERMCEventHeader.h"
 
 #include "G4IonTable.hh"
 
-ERDecay2H_6Li::ERDecay2H_6Li():
-  ERDecay("2H_6Li"),
+ERDecay2H_3He3H::ERDecay2H_3He3H():
+  ERDecay("2H_3He3H"),
   fDecayFinish(kFALSE),
   fTargetReactZ(0.),
   fMinStep(0.01),
   f8He(NULL),
   f2H (NULL),
   f6Li(NULL),
-  // f4n (NULL),
+  f3H (NULL),
+  f3He (NULL),
   fn  (NULL),
-  fIon6Li(NULL),
+  fUnstable6Li(NULL),
   f4nMass(0.),
   fIs4nUserMassSet(false),
   fIs4nExcitationSet(false),
+  fIs6LiExcitationSet(false),
   fADInput(NULL),
   fADFunction(NULL),
   fDecayFilePath(""),
   fDecayFileFinished(kFALSE),
-  fDecayFileCurrentEvent(0)
+  fDecayFileCurrentEvent(0),
+  fDecay6LiFilePath(""),
+  fDecay6LiFileFinished(kFALSE),
+  fDecay6LiFileCurrentEvent(0)  
 {
   fRnd = new TRandom3();
   // fRnd->SetSeed();
@@ -54,18 +59,23 @@ ERDecay2H_6Li::ERDecay2H_6Li():
   fRnd2->SetSeed();
   fReactionPhaseSpace = new TGenPhaseSpace();
   fDecayPhaseSpace = new TGenPhaseSpace();
+  fDecay6LiPhaseSpace = new TGenPhaseSpace();
   FairRunSim* run = FairRunSim::Instance();
   // fUnstable4n = new FairIon("4n",  0, 4, 0);
-  fIon6Li     = new FairIon("6Li", 3, 6, 3);
-  // run->AddNewIon(fUnstable4n);
-  run->AddNewIon(fIon6Li);
+  fUnstable6Li     = new FairIon("6Li", 3, 6, 3);
+  fIon3He     = new FairIon("3He", 2, 3, 2);
+  fIon3H     = new FairIon("3H", 1, 3, 1);
+  run->AddNewIon(fIon3H);
+  run->AddNewIon(fIon3He);
+  run->AddNewIon(fUnstable6Li);
 
   fLv4n = new TLorentzVector();
   fLv6Li = new TLorentzVector();
+  LOG(DEBUG) << "LVS created" << endl;
 }
 
 //-------------------------------------------------------------------------------------------------
-ERDecay2H_6Li::~ERDecay2H_6Li() {
+ERDecay2H_3He3H::~ERDecay2H_3He3H() {
   if (fDecayFile.is_open())
     fDecayFile.close();
   if (fDecayFilePath == ""){ // LV from TGenPhaseSpace will be deleted in TGenPhaseSpace
@@ -74,10 +84,16 @@ ERDecay2H_6Li::~ERDecay2H_6Li() {
       delete fLvn3;
       delete fLvn4;
   }
+  if (fDecay6LiFile.is_open())
+    fDecay6LiFile.close();
+  if (fDecay6LiFilePath == ""){ // LV from TGenPhaseSpace will be deleted in TGenPhaseSpace
+      delete fLv3H;
+      delete fLv3He;
+  }
 }
 
 //-------------------------------------------------------------------------------------------------
-void ERDecay2H_6Li::Set4nExitation(Double_t excMean, Double_t fwhm, Double_t distibWeight) {
+void ERDecay2H_3He3H::Set4nExitation(Double_t excMean, Double_t fwhm, Double_t distibWeight) {
   f4nExcitationMean.push_back(excMean);
   f4nExcitationSigma.push_back(fwhm / 2.355);
   if (!fIs4nExcitationSet) {
@@ -87,45 +103,61 @@ void ERDecay2H_6Li::Set4nExitation(Double_t excMean, Double_t fwhm, Double_t dis
   }
   f4nExcitationWeight.push_back(f4nExcitationWeight.back() + distibWeight);
 }
-
 //-------------------------------------------------------------------------------------------------
-Bool_t ERDecay2H_6Li::Init() {
+void ERDecay2H_3He3H::Set6LiExitation(Double_t excMean, Double_t fwhm, Double_t distibWeight) {
+  f6LiExcitationMean.push_back(excMean);
+  f6LiExcitationSigma.push_back(fwhm / 2.355);
+  if (!fIs6LiExcitationSet) {
+    f6LiExcitationWeight.push_back(distibWeight);    
+    fIs6LiExcitationSet = true;
+    return;
+  }
+  f6LiExcitationWeight.push_back(f6LiExcitationWeight.back() + distibWeight);
+}
+//-------------------------------------------------------------------------------------------------
+Bool_t ERDecay2H_3He3H::Init() {
 
   cout << "Decayer Init." << endl;
 
   f8He = TDatabasePDG::Instance()->GetParticle("8He");
   if ( ! f8He ) {
-    std::cerr  << "-W- ERDecay2H_6Li: Ion 8He not found in database!" << endl;
+    std::cerr  << "-W- ERDecay2H_3He3H: Ion 8He not found in database!" << endl;
     return kFALSE;
   }
 
   f2H = TDatabasePDG::Instance()->GetParticle("Deuteron");
   if ( ! f2H ) {
-    std::cerr  << "-W- ERDecay2H_6Li: Ion Deuteron not found in database!" << endl;
+    std::cerr  << "-W- ERDecay2H_3He3H: Ion Deuteron not found in database!" << endl;
     return kFALSE;
   }
 
-  // f4n = TDatabasePDG::Instance()->GetParticle("4n");
-  // if ( ! f4n ) {
-  //   std::cerr  << "-W- ERDecay2H_6Li: Ion 4n not found in database!" << endl;
-  //   return kFALSE;
-  // }
+  f3H = TDatabasePDG::Instance()->GetParticle(fIon3H->GetName());
+  if ( ! f3H ) {
+    std::cerr  << "-W- ERDecay2H_3He3H: Ion 3H not found in database!" << endl;
+    return kFALSE;
+  }
 
-  f6Li = TDatabasePDG::Instance()->GetParticle(fIon6Li->GetName());
+  f3He = TDatabasePDG::Instance()->GetParticle(fIon3He->GetName());
+  if ( ! f3He ) {
+    std::cerr  << "-W- ERDecay2H_3He3H: Ion 3He not found in database!" << endl;
+    return kFALSE;
+  }
+
+  f6Li = TDatabasePDG::Instance()->GetParticle(fUnstable6Li->GetName());
   if ( ! f6Li ) {
-    std::cerr  << "-W- ERDecay2H_6Li: Ion 6Li not found in database!" << endl;
+    std::cerr  << "-W- ERDecay2H_3He3H: Ion 6Li not found in database!" << endl;
     return kFALSE;
   }
 
   fn = TDatabasePDG::Instance()->GetParticle("neutron");
   if ( ! fn ) {
-    std::cerr  << "-W- ERDecay2H_6Li: Particle neutron not found in database!" << endl;
+    std::cerr  << "-W- ERDecay2H_3He3H: Particle neutron not found in database!" << endl;
     return kFALSE;
   }
   // if (fIs4nUserMassSet) {
   //   fUnstable4n->SetMass(f4nMass / .931494028);
   // } else {
-  //   f4nMass = f4n->Mass(); // if user mass is not defined in ERDecay2H_6Li::SetH7Mass() than get a GEANT mass
+  //   f4nMass = f4n->Mass(); // if user mass is not defined in ERDecay2H_3He3H::SetH7Mass() than get a GEANT mass
   // }
   CalculateTargetParameters();
 
@@ -145,11 +177,23 @@ Bool_t ERDecay2H_6Li::Init() {
     fLvn4 = new TLorentzVector();
   }
 
+  if (fDecay6LiFilePath != ""){
+    LOG(INFO) << "Use decay kinematics from external text file" << FairLogger::endl;
+    fDecay6LiFile.open(fDecay6LiFilePath.Data());
+    if (!fDecay6LiFile.is_open())
+      LOG(FATAL) << "Can`t open decay file " << fDecay6LiFilePath << FairLogger::endl;
+    //Пропускаем шапку файла
+    std::string header;
+    std::getline(fDecay6LiFile,header);
+    fLv3H = new TLorentzVector();
+    fLv3He = new TLorentzVector();
+  }
+
   return kTRUE;
 }
 
 //-------------------------------------------------------------------------------------------------
-Bool_t ERDecay2H_6Li::Stepping() {
+Bool_t ERDecay2H_3He3H::Stepping() {
   if(!fDecayFinish && gMC->TrackPid() == 1000020080
      && TString(gMC->CurrentVolName()).Contains(GetInteractionVolumeName()))
   {
@@ -166,8 +210,7 @@ Bool_t ERDecay2H_6Li::Stepping() {
     gMC->TrackPosition(curPos);
     Double_t trackStep = gMC->TrackStep();
     fDistanceFromEntrance += trackStep;
-    // std::cout << "Track step: " << fDistanceFromEntrance << "; Diff " << (curPos.Vect() - fInputPoint).Mag() <<  endl;    
-    // std::cout << "Track step: " << fDistanceFromEntrance <<  endl;    
+  
     if (fDistanceFromEntrance > fDistanceToInteractPoint) {
       // std::cout << "Start reation in target. Defined pos: " << fDistanceToInteractPoint << ", current pos: " << curPos.Z() << endl;
       
@@ -195,8 +238,10 @@ Bool_t ERDecay2H_6Li::Stepping() {
       Int_t reactionHappen = kFALSE;
       
       Double_t decay4nMass;
+      Double_t decay6LiMass;
       Int_t reactionAttempsCounter = 0;
-      Double_t excitation = 0;  // excitation energy
+      Double_t excitation4n = 0;  // excitation energy
+      Double_t excitation6Li = 0;  // excitation energy
       while (reactionHappen==kFALSE) { // while reaction condition is not fullfilled   
         decay4nMass = f4nMass;
         if (fIs4nExcitationSet) {
@@ -208,34 +253,48 @@ Bool_t ERDecay2H_6Li::Stepping() {
               break;
             }
           }
-          excitation = gRandom->Gaus(f4nExcitationMean[distribNum], f4nExcitationSigma[distribNum]);
+          excitation4n = gRandom->Gaus(f4nExcitationMean[distribNum], f4nExcitationSigma[distribNum]);
           // fUnstable4n->SetExcEnergy(excitation);
         }
-        decay4nMass += excitation;
-        const float li6_mass = G4IonTable::GetIonTable()->GetIon(3,6)->GetPDGMass() * 1e-3;
-        if((ECM - li6_mass - decay4nMass) > 0) { // выход из цикла while для PhaseGenerator
+        decay4nMass += excitation4n;
+
+        if (fIs6LiExcitationSet) {
+          Double_t randWeight = gRandom->Uniform(0., f6LiExcitationWeight.back());
+          Int_t distribNum = 0;
+          // choose distribution by weight
+          for (; distribNum < f6LiExcitationWeight.size(); distribNum++) {
+            if (randWeight < f6LiExcitationWeight[distribNum]) {
+              break;
+            }
+          }
+          excitation6Li = gRandom->Gaus(f6LiExcitationMean[distribNum], f6LiExcitationSigma[distribNum]);
+          // fUnstable4n->SetExcEnergy(excitation);
+        }
+        decay6LiMass = G4IonTable::GetIonTable()->GetIon(3,6)->GetPDGMass() * 1e-3;
+        decay6LiMass += excitation6Li;
+
+        if((ECM - decay6LiMass - decay4nMass) > 0) { // выход из цикла while для PhaseGenerator
           reactionHappen = kTRUE;
-          LOG(DEBUG) << "[ERDecay2H_6Li] Reaction is happen" << endl;
+          LOG(DEBUG) << "[ERDecay2H_3He3H] Reaction is happen" << endl;
         }
         reactionAttempsCounter++;
         if (reactionAttempsCounter > 1000){
-          LOG(DEBUG) << "[ERDecay2H_6Li] Reaction is forbidden for this CM energy" << endl;
+          LOG(DEBUG) << "[ERDecay2H_3He3H] Reaction is forbidden for this CM energy" << endl;
           fDecayFinish = kTRUE;
           return kTRUE;
         }
       }
-
-      ReactionPhaseGenerator(ECM, decay4nMass); 
+      ReactionPhaseGenerator(ECM, decay4nMass, excitation6Li); 
       fLv4n->Boost(boost);
       fLv6Li->Boost(boost);
-
-      //4n → n +n +n +n
-      if (!DecayPhaseGenerator(excitation)){
-        fDecayFinish = kTRUE;
-        return kTRUE;
+      //4n → n +n +n +n. 6Li->3He + 3H
+      if (!DecayPhaseGenerator(excitation4n)){
+        if (!Decay6LiPhaseGenerator(excitation6Li)){
+          fDecayFinish = kTRUE;
+          return kTRUE;
+        }
       }
-
-      Int_t He8TrackNb, tetraNTrackNb, Li6TrackNb, n1TrackNb, n2TrackNb, n3TrackNb, n4TrackNb;
+      Int_t He8TrackNb, tetraNTrackNb, Li6TrackNb, He3TrackNb, H3TrackNb, n1TrackNb, n2TrackNb, n3TrackNb, n4TrackNb;
 
       He8TrackNb = gMC->GetStack()->GetCurrentTrackNumber();
       // std::cout << "He8TrackNb " << He8TrackNb << std::endl;
@@ -245,12 +304,23 @@ Bool_t ERDecay2H_6Li::Stepping() {
                                  fLv7H->E(), curPos.X(), curPos.Y(), curPos.Z(),
                                  gMC->TrackTime(), 0., 0., 0.,
                                  kPDecay, H7TrackNb, decay7HMass, 0);*/
-
       gMC->GetStack()->PushTrack(1, He8TrackNb, f6Li->PdgCode(),
                                  fLv6Li->Px(), fLv6Li->Py(), fLv6Li->Pz(),
                                  fLv6Li->E(), curPos.X(), curPos.Y(), curPos.Z(),
                                  gMC->TrackTime(), 0., 0., 0.,
-                                 kPDecay, Li6TrackNb, f6Li->Mass(), 0);
+                                 kPDecay, Li6TrackNb, decay6LiMass, 0);
+      // std::cout << "my Out " << f6Li->PdgCode() << " " << f3H->PdgCode() << endl;
+      // std::cout << "my Out " << He8TrackNb << " " << f3H->PdgCode() << " " << fLv3H->Px() << " " << fLv3H->Py() << " " << fLv3H->Pz() << " " << fLv3H->E() << " " << curPos.X() << " " << curPos.Y() << " " << curPos.Z() << " " << gMC->TrackTime() << " " << kPDecay << " " << H3TrackNb << " " << f3H->Mass() << endl;
+      // gMC->GetStack()->PushTrack(1, He8TrackNb, f3H->PdgCode(),
+      //                            fLv3H->Px(), fLv3H->Py(), fLv3H->Pz(),
+      //                            fLv3H->E(), curPos.X(), curPos.Y(), curPos.Z(),
+      //                            gMC->TrackTime(), 0., 0., 0.,
+      //                            kPDecay, H3TrackNb, f3H->Mass(), 0);
+      // gMC->GetStack()->PushTrack(1, He8TrackNb, f3He->PdgCode(),
+      //                            fLv3He->Px(), fLv3He->Py(), fLv3He->Pz(),
+      //                            fLv3He->E(), curPos.X(), curPos.Y(), curPos.Z(),
+      //                            gMC->TrackTime(), 0., 0., 0.,
+      //                            kPDecay, He3TrackNb, f3He->Mass(), 0);                                        
       gMC->GetStack()->PushTrack(1, He8TrackNb, fn->PdgCode(),
                                  fLvn1->Px(),fLvn1->Py(),fLvn1->Pz(),
                                  fLvn1->E(), curPos.X(), curPos.Y(), curPos.Z(),
@@ -274,7 +344,6 @@ Bool_t ERDecay2H_6Li::Stepping() {
       gMC->StopTrack();
       fDecayFinish = kTRUE;
       gMC->SetMaxStep(100.);
-
       FairRunSim* run = FairRunSim::Instance();
       if (TString(run->GetMCEventHeader()->ClassName()).Contains("ERDecayMCEventHeader")){   
         ERDecayMCEventHeader* header = (ERDecayMCEventHeader*)run->GetMCEventHeader();
@@ -282,14 +351,16 @@ Bool_t ERDecay2H_6Li::Stepping() {
         header->SetInputIon(He8TrackNb);
         header->AddOutputParticle(tetraNTrackNb);
         header->AddOutputParticle(Li6TrackNb);
+        header->AddOutputParticle(H3TrackNb);
+        header->AddOutputParticle(He3TrackNb);        
         header->AddOutputParticle(n1TrackNb);
         header->AddOutputParticle(n2TrackNb);
         header->AddOutputParticle(n3TrackNb);
         header->AddOutputParticle(n4TrackNb);
       }   
-      if (TString(run->GetMCEventHeader()->ClassName()).Contains("ER2H_6LiEventHeader")){   
-        ER2H_6LiEventHeader* header = (ER2H_6LiEventHeader*)run->GetMCEventHeader();
-        header->SetData(curPos.Vect(), lv8He,  lv2H, *fLv6Li, *fLv4n, *fLvn1, *fLvn2, *fLvn3, *fLvn4, fTheta);
+      if (TString(run->GetMCEventHeader()->ClassName()).Contains("ER2H_3He3HEventHeader")){   
+        ER2H_3He3HEventHeader* header = (ER2H_3He3HEventHeader*)run->GetMCEventHeader();
+        header->SetData(curPos.Vect(), lv8He,  lv2H, *fLv6Li, *fLv4n, *fLvn1, *fLvn2, *fLvn3, *fLvn4, *fLv3H, *fLv3He, fTheta);
         header->SetTrigger(1);
       }
     }
@@ -298,7 +369,7 @@ Bool_t ERDecay2H_6Li::Stepping() {
 }
 
 //-------------------------------------------------------------------------------------------------
-void ERDecay2H_6Li::BeginEvent() { 
+void ERDecay2H_3He3H::BeginEvent() { 
   fDecayFinish = kFALSE;
   fIsInterationPointFound = kFALSE;
   fTargetReactZ = fRnd->Uniform(-fTargetThickness / 2, fTargetThickness / 2);
@@ -306,22 +377,22 @@ void ERDecay2H_6Li::BeginEvent() {
 }
 
 //-------------------------------------------------------------------------------------------------
-void ERDecay2H_6Li::FinishEvent() {
+void ERDecay2H_3He3H::FinishEvent() {
   FairRunSim* run = FairRunSim::Instance();
   if (TString(run->GetMCEventHeader()->ClassName()).Contains("ERDecayMCEventHeader")){   
     ERDecayMCEventHeader* header = (ERDecayMCEventHeader*)run->GetMCEventHeader();
     header->Clear();
   }
-  if (TString(run->GetMCEventHeader()->ClassName()).Contains("ER2H_6LiEventHeader")){   
-    ER2H_6LiEventHeader* header = (ER2H_6LiEventHeader*)run->GetMCEventHeader();
+  if (TString(run->GetMCEventHeader()->ClassName()).Contains("ER2H_3He3HEventHeader")){   
+    ER2H_3He3HEventHeader* header = (ER2H_3He3HEventHeader*)run->GetMCEventHeader();
     header->Clear();
   }
 }
 
 //-------------------------------------------------------------------------------------------------
-void ERDecay2H_6Li::ReactionPhaseGenerator(Double_t Ecm, Double_t n4Mass) {
+void ERDecay2H_3He3H::ReactionPhaseGenerator(Double_t Ecm, Double_t n4Mass, Double_t exc) {
   Double_t m1 = n4Mass;
-  Double_t m2 = G4IonTable::GetIonTable()->GetIon(3,6)->GetPDGMass() * 1e-3;
+  Double_t m2 = G4IonTable::GetIonTable()->GetIon(3,6)->GetPDGMass() * 1e-3 + exc;
 
   // Energy of 1-st particle in cm.
   // total energy of the first particle is calculated as
@@ -348,7 +419,7 @@ void ERDecay2H_6Li::ReactionPhaseGenerator(Double_t Ecm, Double_t n4Mass) {
 }
 
 //-------------------------------------------------------------------------------------------------
-Bool_t ERDecay2H_6Li::DecayPhaseGenerator(const Double_t excitation) {
+Bool_t ERDecay2H_3He3H::DecayPhaseGenerator(const Double_t excitation) {
   if (fDecayFilePath == ""){ // if decay file not defined, per morm decay using phase space
     Double_t decayMasses[4];
     decayMasses[0] = fn->Mass(); 
@@ -405,11 +476,57 @@ Bool_t ERDecay2H_6Li::DecayPhaseGenerator(const Double_t excitation) {
   fill_output_lorentz_vectors_in_lab(fLvn4, pn4, fn->Mass());
   return kTRUE;
 }
+//-------------------------------------------------------------------------------------------------
+Bool_t ERDecay2H_3He3H::Decay6LiPhaseGenerator(const Double_t excitation) {
+  if (fDecay6LiFilePath == ""){ // if decay file not defined, per morm decay using phase space
+    Double_t decayMasses[2];
+    decayMasses[0] = f3H->Mass(); 
+    decayMasses[1] = f3He->Mass(); 
+    fDecay6LiPhaseSpace->SetDecay(*fLv6Li, 2, decayMasses);
+    fDecay6LiPhaseSpace->Generate();
+    fLv3H = fDecay6LiPhaseSpace->GetDecay(0);
+    fLv3He = fDecay6LiPhaseSpace->GetDecay(1);
+    return kTRUE;
+  }
+  if (fDecay6LiFile.eof()){
+    LOG(ERROR) << "Decay file finished! There are no more events in file " << fDecay6LiFilePath
+               << " to be processed." << FairLogger::endl;
+    return kFALSE;
+  }
+  std::string event_line;
+  std::getline(fDecayFile,event_line);
+  std::istringstream iss(event_line);
+  std::vector<std::string> outputs_components((std::istream_iterator<std::string>(iss)),
+                                               std::istream_iterator<std::string>());
+  if (outputs_components.size() < 2*3){
+    LOG(ERROR) << "Wrong components number in raw in decay file!" << FairLogger::endl;
+    return kFALSE;
+  }
+  // Fill momentum vectors in CM.
+  TVector3 p3h(std::stod(outputs_components[0]),std::stod(outputs_components[1]),
+               std::stod(outputs_components[2]));
+  TVector3 p3he(std::stod(outputs_components[3]),std::stod(outputs_components[4]),
+               std::stod(outputs_components[5]));
+  // Apply scale factor
+  const auto excitationScale = excitation > 0. ? sqrt(excitation / fDecay6LiFileExcitation) : 1.;
+  const auto MeV2GeV = 1./1000.;
+  const auto scale = excitationScale * MeV2GeV;
+  p3h *= scale;
+  p3he *= scale;
+  const auto fill_output_lorentz_vectors_in_lab = 
+      [this](TLorentzVector* lv, const TVector3& p, const Double_t mass) {
+        lv->SetXYZM(p.X(), p.Y(), p.Z(), mass);
+        lv->Boost(fLv6Li->BoostVector());
+      };
+  fill_output_lorentz_vectors_in_lab(fLv3H, p3h, f3H->Mass());
+  fill_output_lorentz_vectors_in_lab(fLv3He, p3he, f3He->Mass());
+  return kTRUE;
+}
 
 //-------------------------------------------------------------------------------------------------
-Double_t ERDecay2H_6Li::ADEvaluate(Double_t *x, Double_t *p) {
+Double_t ERDecay2H_3He3H::ADEvaluate(Double_t *x, Double_t *p) {
   if (fADInput->IsZombie()) {
-    Error("ERDecay2H_6Li::ADEvaluate", "AD input was not loaded");
+    Error("ERDecay2H_3He3H::ADEvaluate", "AD input was not loaded");
     return -1;
   }
   // on each step of creating distribution function returns interpolated value of input data
@@ -417,7 +534,7 @@ Double_t ERDecay2H_6Li::ADEvaluate(Double_t *x, Double_t *p) {
 }
 
 //-------------------------------------------------------------------------------------------------
-void ERDecay2H_6Li::SetAngularDistribution(TString ADFile) {
+void ERDecay2H_3He3H::SetAngularDistribution(TString ADFile) {
   TString ADFilePath = gSystem->Getenv("VMCWORKDIR");
   ADFilePath =  ADFile;
   std::ifstream f;
@@ -441,7 +558,7 @@ void ERDecay2H_6Li::SetAngularDistribution(TString ADFile) {
   }
   fADInput = new TGraph(tet, sigma);
   if (fADInput->GetN() <= 0) { //if there are no points in input file
-    LOG(INFO) << "ERDecay2H_6Li::SetAngularDistribution: "
+    LOG(INFO) << "ERDecay2H_3He3H::SetAngularDistribution: "
               << "Too few inputs for creation of AD function!" << FairLogger::endl;
     return;
   }
@@ -452,9 +569,9 @@ void ERDecay2H_6Li::SetAngularDistribution(TString ADFile) {
   // On each step of grid it calls ADEvaluate() to get interpolated values of input data.
   fThetaMin = angle[0];
   fThetaMax = angle[fADInput->GetN()-1];
-  fADFunction = new TF1("angDistr", this, &ERDecay2H_6Li::ADEvaluate, 
-                         fThetaMin, fThetaMax, 0, "ERDecay2H_6Li", "ADEvaluate");
+  fADFunction = new TF1("angDistr", this, &ERDecay2H_3He3H::ADEvaluate, 
+                         fThetaMin, fThetaMax, 0, "ERDecay2H_3He3H", "ADEvaluate");
   // fADFunction->Eval(1.);
 }
 //-------------------------------------------------------------------------------------------------
-ClassImp(ERDecay2H_6Li)
+ClassImp(ERDecay2H_3He3H)
