@@ -96,6 +96,7 @@ private:
   Double_t         fMinStep;
   Double_t         fTargetThickness;
   Bool_t           fDecayFinish;
+  Bool_t           fDecay6LiFinish;
 
   std::vector<Double_t> f4nExcitationMean;
   std::vector<Double_t> f4nExcitationSigma; 

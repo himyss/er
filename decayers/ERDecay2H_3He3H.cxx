@@ -31,6 +31,7 @@ using namespace std;
 ERDecay2H_3He3H::ERDecay2H_3He3H():
   ERDecay("2H_3He3H"),
   fDecayFinish(kFALSE),
+  fDecay6LiFinish(kFALSE),
   fTargetReactZ(0.),
   fMinStep(0.01),
   f8He(NULL),
@@ -194,12 +195,13 @@ Bool_t ERDecay2H_3He3H::Init() {
 
 //-------------------------------------------------------------------------------------------------
 Bool_t ERDecay2H_3He3H::Stepping() {
-  if(!fDecayFinish && gMC->TrackPid() == 1000020080
+  if(!fDecayFinish && !fDecay6LiFinish && gMC->TrackPid() == 1000020080
      && TString(gMC->CurrentVolName()).Contains(GetInteractionVolumeName()))
   {
     if (!fIsInterationPointFound) {
       if (!FindInteractionPoint()) {
         fDecayFinish = kTRUE;
+        fDecay6LiFinish = kTRUE;
         return kTRUE;
       } else {
         fDistanceFromEntrance = 0;
@@ -281,6 +283,7 @@ Bool_t ERDecay2H_3He3H::Stepping() {
         if (reactionAttempsCounter > 1000){
           LOG(DEBUG) << "[ERDecay2H_3He3H] Reaction is forbidden for this CM energy" << endl;
           fDecayFinish = kTRUE;
+          fDecay6LiFinish = kTRUE;
           return kTRUE;
         }
       }
@@ -288,12 +291,20 @@ Bool_t ERDecay2H_3He3H::Stepping() {
       fLv4n->Boost(boost);
       fLv6Li->Boost(boost);
       //4n → n +n +n +n. 6Li->3He + 3H
-      if (!DecayPhaseGenerator(excitation4n)){
-        if (!Decay6LiPhaseGenerator(excitation6Li)){
-          fDecayFinish = kTRUE;
-          return kTRUE;
-        }
+      if (!fDecayFinish) {
+        DecayPhaseGenerator(excitation4n);
       }
+      if (!fDecay6LiFinish) {
+        Decay6LiPhaseGenerator(excitation4n);
+      }      
+      // if (!DecayPhaseGenerator(excitation4n)){
+      //   fDecayFinish = kTRUE;
+      //   return kTRUE;
+      // }
+      // if (!Decay6LiPhaseGenerator(excitation6Li)){
+      //   fDecay6LiFinish = kTRUE;
+      //   return kTRUE;
+      // }      
       Int_t He8TrackNb, tetraNTrackNb, Li6TrackNb, He3TrackNb, H3TrackNb, n1TrackNb, n2TrackNb, n3TrackNb, n4TrackNb;
 
       He8TrackNb = gMC->GetStack()->GetCurrentTrackNumber();
@@ -309,18 +320,16 @@ Bool_t ERDecay2H_3He3H::Stepping() {
                                  fLv6Li->E(), curPos.X(), curPos.Y(), curPos.Z(),
                                  gMC->TrackTime(), 0., 0., 0.,
                                  kPDecay, Li6TrackNb, decay6LiMass, 0);
-      // std::cout << "my Out " << f6Li->PdgCode() << " " << f3H->PdgCode() << endl;
-      // std::cout << "my Out " << He8TrackNb << " " << f3H->PdgCode() << " " << fLv3H->Px() << " " << fLv3H->Py() << " " << fLv3H->Pz() << " " << fLv3H->E() << " " << curPos.X() << " " << curPos.Y() << " " << curPos.Z() << " " << gMC->TrackTime() << " " << kPDecay << " " << H3TrackNb << " " << f3H->Mass() << endl;
-      // gMC->GetStack()->PushTrack(1, He8TrackNb, f3H->PdgCode(),
-      //                            fLv3H->Px(), fLv3H->Py(), fLv3H->Pz(),
-      //                            fLv3H->E(), curPos.X(), curPos.Y(), curPos.Z(),
-      //                            gMC->TrackTime(), 0., 0., 0.,
-      //                            kPDecay, H3TrackNb, f3H->Mass(), 0);
-      // gMC->GetStack()->PushTrack(1, He8TrackNb, f3He->PdgCode(),
-      //                            fLv3He->Px(), fLv3He->Py(), fLv3He->Pz(),
-      //                            fLv3He->E(), curPos.X(), curPos.Y(), curPos.Z(),
-      //                            gMC->TrackTime(), 0., 0., 0.,
-      //                            kPDecay, He3TrackNb, f3He->Mass(), 0);                                        
+      gMC->GetStack()->PushTrack(1, He8TrackNb, f3H->PdgCode(),
+                                 fLv3H->Px(), fLv3H->Py(), fLv3H->Pz(),
+                                 fLv3H->E(), curPos.X(), curPos.Y(), curPos.Z(),
+                                 gMC->TrackTime(), 0., 0., 0.,
+                                 kPDecay, H3TrackNb, f3H->Mass(), 0);
+      gMC->GetStack()->PushTrack(1, He8TrackNb, f3He->PdgCode(),
+                                 fLv3He->Px(), fLv3He->Py(), fLv3He->Pz(),
+                                 fLv3He->E(), curPos.X(), curPos.Y(), curPos.Z(),
+                                 gMC->TrackTime(), 0., 0., 0.,
+                                 kPDecay, He3TrackNb, f3He->Mass(), 0);                                        
       gMC->GetStack()->PushTrack(1, He8TrackNb, fn->PdgCode(),
                                  fLvn1->Px(),fLvn1->Py(),fLvn1->Pz(),
                                  fLvn1->E(), curPos.X(), curPos.Y(), curPos.Z(),
@@ -343,6 +352,7 @@ Bool_t ERDecay2H_3He3H::Stepping() {
                                  kPDecay, n4TrackNb, fn->Mass(), 0);
       gMC->StopTrack();
       fDecayFinish = kTRUE;
+      fDecay6LiFinish = kTRUE;
       gMC->SetMaxStep(100.);
       FairRunSim* run = FairRunSim::Instance();
       if (TString(run->GetMCEventHeader()->ClassName()).Contains("ERDecayMCEventHeader")){   
@@ -371,6 +381,7 @@ Bool_t ERDecay2H_3He3H::Stepping() {
 //-------------------------------------------------------------------------------------------------
 void ERDecay2H_3He3H::BeginEvent() { 
   fDecayFinish = kFALSE;
+  fDecay6LiFinish = kFALSE;
   fIsInterationPointFound = kFALSE;
   fTargetReactZ = fRnd->Uniform(-fTargetThickness / 2, fTargetThickness / 2);
   FairRunSim* run = FairRunSim::Instance();
@@ -474,6 +485,7 @@ Bool_t ERDecay2H_3He3H::DecayPhaseGenerator(const Double_t excitation) {
   fill_output_lorentz_vectors_in_lab(fLvn2, pn2, fn->Mass());
   fill_output_lorentz_vectors_in_lab(fLvn3, pn3, fn->Mass());
   fill_output_lorentz_vectors_in_lab(fLvn4, pn4, fn->Mass());
+
   return kTRUE;
 }
 //-------------------------------------------------------------------------------------------------
