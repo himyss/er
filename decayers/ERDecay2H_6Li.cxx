@@ -98,12 +98,14 @@ Bool_t ERDecay2H_6Li::Init() {
     std::cerr  << "-W- ERDecay2H_6Li: Ion 8He not found in database!" << endl;
     return kFALSE;
   }
+  std::cout << "8He " << f8He->Mass() << " " << G4IonTable::GetIonTable()->GetIon(2,8)->GetPDGMass() * 1e-3 << std::endl;
 
   f2H = TDatabasePDG::Instance()->GetParticle("Deuteron");
   if ( ! f2H ) {
     std::cerr  << "-W- ERDecay2H_6Li: Ion Deuteron not found in database!" << endl;
     return kFALSE;
   }
+  std::cout << "2H " << f2H->Mass() << " " << G4IonTable::GetIonTable()->GetIon(1,2)->GetPDGMass() * 1e-3 << std::endl;
 
   // f4n = TDatabasePDG::Instance()->GetParticle("4n");
   // if ( ! f4n ) {
@@ -116,6 +118,7 @@ Bool_t ERDecay2H_6Li::Init() {
     std::cerr  << "-W- ERDecay2H_6Li: Ion 6Li not found in database!" << endl;
     return kFALSE;
   }
+  std::cout << "6Li " << f6Li->Mass() << " " << G4IonTable::GetIonTable()->GetIon(3,6)->GetPDGMass() * 1e-3 << std::endl;
 
   fn = TDatabasePDG::Instance()->GetParticle("neutron");
   if ( ! fn ) {
@@ -250,7 +253,7 @@ Bool_t ERDecay2H_6Li::Stepping() {
                                  fLv6Li->Px(), fLv6Li->Py(), fLv6Li->Pz(),
                                  fLv6Li->E(), curPos.X(), curPos.Y(), curPos.Z(),
                                  gMC->TrackTime(), 0., 0., 0.,
-                                 kPDecay, Li6TrackNb, f6Li->Mass(), 0);
+                                 kPDecay, Li6TrackNb, G4IonTable::GetIonTable()->GetIon(3,6)->GetPDGMass() * 1e-3, 0);
       gMC->GetStack()->PushTrack(1, He8TrackNb, fn->PdgCode(),
                                  fLvn1->Px(),fLvn1->Py(),fLvn1->Pz(),
                                  fLvn1->E(), curPos.X(), curPos.Y(), curPos.Z(),

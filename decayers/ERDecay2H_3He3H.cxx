@@ -125,36 +125,42 @@ Bool_t ERDecay2H_3He3H::Init() {
     std::cerr  << "-W- ERDecay2H_3He3H: Ion 8He not found in database!" << endl;
     return kFALSE;
   }
+  std::cout << "8He " << f8He->Mass() << " " << G4IonTable::GetIonTable()->GetIon(2,8)->GetPDGMass() * 1e-3 << std::endl;
 
   f2H = TDatabasePDG::Instance()->GetParticle("Deuteron");
   if ( ! f2H ) {
     std::cerr  << "-W- ERDecay2H_3He3H: Ion Deuteron not found in database!" << endl;
     return kFALSE;
   }
+  std::cout << "2H " << f2H->Mass() << " " << G4IonTable::GetIonTable()->GetIon(1,2)->GetPDGMass() * 1e-3 << std::endl;
 
   f3H = TDatabasePDG::Instance()->GetParticle(fIon3H->GetName());
   if ( ! f3H ) {
     std::cerr  << "-W- ERDecay2H_3He3H: Ion 3H not found in database!" << endl;
     return kFALSE;
   }
+  std::cout << "3H " << f3H->Mass() << " " << G4IonTable::GetIonTable()->GetIon(1,3)->GetPDGMass() * 1e-3 << std::endl;
 
   f3He = TDatabasePDG::Instance()->GetParticle(fIon3He->GetName());
   if ( ! f3He ) {
     std::cerr  << "-W- ERDecay2H_3He3H: Ion 3He not found in database!" << endl;
     return kFALSE;
   }
+  std::cout << "3He " << f3He->Mass() << " " << G4IonTable::GetIonTable()->GetIon(2,3)->GetPDGMass() * 1e-3 << std::endl;
 
   f6Li = TDatabasePDG::Instance()->GetParticle(fUnstable6Li->GetName());
   if ( ! f6Li ) {
     std::cerr  << "-W- ERDecay2H_3He3H: Ion 6Li not found in database!" << endl;
     return kFALSE;
   }
+  std::cout << "6Li " << f6Li->Mass() << " " << G4IonTable::GetIonTable()->GetIon(3,6)->GetPDGMass() * 1e-3 << std::endl;
 
   fn = TDatabasePDG::Instance()->GetParticle("neutron");
   if ( ! fn ) {
     std::cerr  << "-W- ERDecay2H_3He3H: Particle neutron not found in database!" << endl;
     return kFALSE;
   }
+  std::cout << "neutron " << fn->Mass() << std::endl;
   // if (fIs4nUserMassSet) {
   //   fUnstable4n->SetMass(f4nMass / .931494028);
   // } else {
@@ -295,7 +301,7 @@ Bool_t ERDecay2H_3He3H::Stepping() {
         DecayPhaseGenerator(excitation4n);
       }
       if (!fDecay6LiFinish) {
-        Decay6LiPhaseGenerator(excitation4n);
+        Decay6LiPhaseGenerator(excitation6Li);
       }      
       // if (!DecayPhaseGenerator(excitation4n)){
       //   fDecayFinish = kTRUE;
@@ -324,12 +330,12 @@ Bool_t ERDecay2H_3He3H::Stepping() {
                                  fLv3H->Px(), fLv3H->Py(), fLv3H->Pz(),
                                  fLv3H->E(), curPos.X(), curPos.Y(), curPos.Z(),
                                  gMC->TrackTime(), 0., 0., 0.,
-                                 kPDecay, H3TrackNb, f3H->Mass(), 0);
+                                 kPDecay, H3TrackNb, G4IonTable::GetIonTable()->GetIon(1,3)->GetPDGMass() * 1e-3, 0);
       gMC->GetStack()->PushTrack(1, He8TrackNb, f3He->PdgCode(),
                                  fLv3He->Px(), fLv3He->Py(), fLv3He->Pz(),
                                  fLv3He->E(), curPos.X(), curPos.Y(), curPos.Z(),
                                  gMC->TrackTime(), 0., 0., 0.,
-                                 kPDecay, He3TrackNb, f3He->Mass(), 0);                                        
+                                 kPDecay, He3TrackNb, G4IonTable::GetIonTable()->GetIon(2,3)->GetPDGMass() * 1e-3, 0);                                        
       gMC->GetStack()->PushTrack(1, He8TrackNb, fn->PdgCode(),
                                  fLvn1->Px(),fLvn1->Py(),fLvn1->Pz(),
                                  fLvn1->E(), curPos.X(), curPos.Y(), curPos.Z(),
@@ -368,6 +374,7 @@ Bool_t ERDecay2H_3He3H::Stepping() {
         header->AddOutputParticle(n3TrackNb);
         header->AddOutputParticle(n4TrackNb);
       }   
+      // std::cout << fLv3H->Mag() << " " << fLv3He->Mag() << std::endl;
       if (TString(run->GetMCEventHeader()->ClassName()).Contains("ER2H_3He3HEventHeader")){   
         ER2H_3He3HEventHeader* header = (ER2H_3He3HEventHeader*)run->GetMCEventHeader();
         header->SetData(curPos.Vect(), lv8He,  lv2H, *fLv6Li, *fLv4n, *fLvn1, *fLvn2, *fLvn3, *fLvn4, *fLv3H, *fLv3He, fTheta);
@@ -492,8 +499,8 @@ Bool_t ERDecay2H_3He3H::DecayPhaseGenerator(const Double_t excitation) {
 Bool_t ERDecay2H_3He3H::Decay6LiPhaseGenerator(const Double_t excitation) {
   if (fDecay6LiFilePath == ""){ // if decay file not defined, per morm decay using phase space
     Double_t decayMasses[2];
-    decayMasses[0] = f3H->Mass(); 
-    decayMasses[1] = f3He->Mass(); 
+    decayMasses[0] = G4IonTable::GetIonTable()->GetIon(1,3)->GetPDGMass() * 1e-3; 
+    decayMasses[1] = G4IonTable::GetIonTable()->GetIon(2,3)->GetPDGMass() * 1e-3; 
     fDecay6LiPhaseSpace->SetDecay(*fLv6Li, 2, decayMasses);
     fDecay6LiPhaseSpace->Generate();
     fLv3H = fDecay6LiPhaseSpace->GetDecay(0);
@@ -530,8 +537,8 @@ Bool_t ERDecay2H_3He3H::Decay6LiPhaseGenerator(const Double_t excitation) {
         lv->SetXYZM(p.X(), p.Y(), p.Z(), mass);
         lv->Boost(fLv6Li->BoostVector());
       };
-  fill_output_lorentz_vectors_in_lab(fLv3H, p3h, f3H->Mass());
-  fill_output_lorentz_vectors_in_lab(fLv3He, p3he, f3He->Mass());
+  fill_output_lorentz_vectors_in_lab(fLv3H, p3h, G4IonTable::GetIonTable()->GetIon(1,3)->GetPDGMass() * 1e-3);
+  fill_output_lorentz_vectors_in_lab(fLv3He, p3he, G4IonTable::GetIonTable()->GetIon(2,3)->GetPDGMass() * 1e-3);
   return kTRUE;
 }
 
