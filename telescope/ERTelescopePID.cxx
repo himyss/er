@@ -80,7 +80,7 @@ InitStatus ERTelescopePID::Init() {
 //--------------------------------------------------------------------------------------------------
 void ERTelescopePID::SetParticle(
     const TString& trackBranchName, const PDG pdg, 
-    const TString& deStation /*= ""*/, const TString& eStation /*= ""*/, const std::map<TString, Double_t> activestations/*= {}*/,
+    const TString& deStation /*= ""*/, const TString& eStation /*= ""*/, const std::map<TString, std::pair<Int_t, Double_t>> activestations/*= {}*/,
     const Double_t deNormalizedThickness /*= 0.002*/,
     const std::vector<TString>& stations_to_use_em_calculator_for_de_e /* = {}*/,
     const std::vector<TString>& stations_to_use_em_calculator_for_kinetic_energy/*= {}*/) {
@@ -98,8 +98,8 @@ void ERTelescopePID::SetParticle(
 //--------------------------------------------------------------------------------------------------
 void ERTelescopePID::SetParticle(
     const TString& trackBranchName, const PDG pdg, 
-    const TString& deStation /*= ""*/, const std::list<TString>& eStations /*= {}*/, const std::map<TString, Double_t> activestations/*= {}*/,
-    const Double_t deNormalizedThickness /*= 0.002*/,
+    const TString& deStation /*= ""*/, const std::list<TString>& eStations /*= {}*/, 
+    const std::map<TString, std::pair<Int_t, Double_t>> activestations/*= {}*/, const Double_t deNormalizedThickness /*= 0.002*/,
     const std::vector<TString>& stations_to_use_em_calculator_for_de_e /* = {}*/,
     const std::vector<TString>& stations_to_use_em_calculator_for_kinetic_energy/*= {}*/) {
   fParticleDescriptions[trackBranchName].emplace_back(pdg, deStation, eStations, activestations,
@@ -171,10 +171,10 @@ void ERTelescopePID::Exec(Option_t* opt) {
               list_active_deposits[pair.first] = fActiveDeposits[keyToFind];
           }
         }
-        LOG(DEBUG) << "[ERTelescopePID] list_active_deposits filled as:" << FairLogger::endl;
+        LOG(DEBUG) << "[ERTelescopePID] list_active_deposits filled with Channel-Amp:" << FairLogger::endl;
         for (const auto& pair : list_active_deposits) {
-            if (pair.second>0) {
-              LOG(DEBUG) << "[ERTelescopePID] " << pair.first << ": " << pair.second << FairLogger::endl;
+            if (pair.second.second>0) {
+              LOG(DEBUG) << "[ERTelescopePID] " << pair.first << ": " << pair.second.first << "-" << pair.second.first << FairLogger::endl;
             }
         }
 
@@ -204,7 +204,7 @@ AddParticle(const TLorentzVector& lvInteraction, const Double_t kinetic_energy, 
             Double_t edepInThickStation, Double_t edepInThinStation,
             Double_t edepInThickStationCorrected, Double_t edepInThinStationCorrected,
             const ERChannel channelOfThinStation, const ERChannel channelOfThickStation, 
-            const std::map<TString, Double_t> activeStationDeposits, TClonesArray& col) {
+            const std::map<TString, std::pair<Int_t, Double_t>> activeStationDeposits, TClonesArray& col) {
   return new(col[col.GetEntriesFast()]) ERTelescopeParticle(lvInteraction, kinetic_energy, deadEloss,
                                             edepInThickStation, edepInThinStation, 
                                             edepInThickStationCorrected, edepInThinStationCorrected,
@@ -433,35 +433,6 @@ std::map<TString, ERDigi*> ERTelescopePID::FindDigisByNode(const TGeoNode& node,
                 << digi->Edep() << FairLogger::endl;
       resultDigis[digiBranchName] = digi;
 
-      auto extractStation = [](const TString& input) -> TString {
-          // Находим индекс "Si_"
-          int pos = input.Index("Si_");
-          if (pos != kNPOS) { // Если найдено
-              // Удаляем все до и включая "Si_"
-              TString result = input;
-              result.Remove(0, pos + strlen("Si_")); // Удаляем всё до "Si_" включительно
-              int firstDigitPos = -1;
-              for (int i = result.Length() - 1; i >= 0; --i) {
-                  if (std::isdigit(result[i])) {
-                      firstDigitPos = i;
-                  } else if (firstDigitPos != -1) {
-                      // Как только нашли первую цифру, прекращаем цикл
-                      break;
-                  }
-              }
-              // Если найдена первая цифра, обрезаем строку
-              if (firstDigitPos != -1) {
-                  result.Remove(firstDigitPos + 1, result.Length() - firstDigitPos - 1); // Удаляем всё после первой цифры
-              }            
-              return result;
-          }
-          if (input.Contains("CsI")) {
-            return "CsI";
-          }
-          return ""; // Возвращаем пустую строку, если "Si_" не найдено
-      };
-      const auto stationBranchSubstring = extractStation(digiBranchName);
-
       break;
     }
     if (!digiFound)
@@ -549,11 +520,9 @@ Double_t ERTelescopePID::ApplyEdepAccountingStrategy(const std::map<TString, ERD
     if (itStationStrategy != fEdepAccountingStrategies.end())
       return itStationStrategy->second;
     if (branchName.Contains("_X")) {
-      // std::cout << " _X " << EdepFromXChannel << std::endl;
       return EdepFromXChannel;
     }
     else if (branchName.Contains("_Y")){
-      // std::cout << " _Y " << EdepFromYChannel << std::endl;
       return EdepFromYChannel;
     }
     if (branchName.Contains("CsI"))
@@ -601,8 +570,8 @@ Double_t ERTelescopePID::ApplyEdepAccountingStrategy(const std::map<TString, ERD
     // @TODO component->GetBranchName(...) should be used here
     if ((strategy == EdepFromXChannel && branchName.Contains("_X"))
         || (strategy == EdepFromYChannel && branchName.Contains("_Y"))) {
-      fActiveDeposits[stationBranchSubstring.Data()] = digi->Edep();
-
+      fActiveDeposits[stationBranchSubstring.Data()].second = digi->Edep();
+      fActiveDeposits[stationBranchSubstring.Data()].first = digi->Channel();
       return digi->Edep();
     }
     summarizedEdep += digi->Edep();

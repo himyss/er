@@ -39,13 +39,13 @@ public:
     const PDG fPDG = -1;
     const TString fDeStation;
     const std::list<TString> fEStations;
-    const std::map<TString, Double_t> active_deposits_;
+    const std::map<TString, std::pair<Int_t, Double_t>> active_deposits_;
     const Double_t fNormalizedThickness = 0.002;
     const std::vector<TString> stations_to_use_em_calculator_for_de_e_;
     const std::vector<TString> stations_to_use_em_calculator_for_kinetic_energy_;
     ParticleDescription() = default;
     ParticleDescription(PDG pdg, const TString& deStation, const std::list<TString>& eStations,
-                        const std::map<TString, Double_t> active_deposits, Double_t normalizedThickness,
+                        const std::map<TString, std::pair<Int_t, Double_t>> active_deposits, Double_t normalizedThickness,
                         const std::vector<TString>& stations_to_use_em_calculator_for_de_e,
                         const std::vector<TString>& stations_to_use_em_calculator_for_kinetic_energy)
         : fPDG(pdg), fDeStation(deStation), fEStations(eStations), active_deposits_(active_deposits),
@@ -74,13 +74,13 @@ public:
   /* Modifiers */
   void SetParticle(const TString& trackBranchName, const PDG pdg, 
                    const TString& deStation = "", const TString& eStation = "", 
-                   const std::map<TString, Double_t> activeDeposits = std::map<TString, Double_t>(), 
+                   const std::map<TString, std::pair<Int_t, Double_t>> activeDeposits = std::map<TString, std::pair<Int_t, Double_t>>(),
                    Double_t deNormalizedThickness = 0.002, 
                    const std::vector<TString>& stations_to_use_em_calculator_for_de_e = {},
                    const std::vector<TString>& stations_to_use_em_calculator_for_kinetic_energy = {});
   void SetParticle(const TString& trackBranchName, const PDG pdg, 
                    const TString& deStation = "", const std::list<TString>& eStations = {}, 
-                   const std::map<TString, Double_t> activeDeposits = std::map<TString, Double_t>(),
+                   const std::map<TString, std::pair<Int_t, Double_t>> activeDeposits = std::map<TString, std::pair<Int_t, Double_t>>(),
                    Double_t deNormalizedThickness = 0.002, 
                    const std::vector<TString>& stations_to_use_em_calculator_for_de_e = {},
                    const std::vector<TString>& stations_to_use_em_calculator_for_kinetic_energy = {});
@@ -101,7 +101,7 @@ public:
   /** @brief Resets all output data. **/
   virtual void Reset();
 private:
-  std::map<TString, Double_t> fActiveDeposits;
+  std::map<TString, std::pair<Int_t, Double_t>> fActiveDeposits;
 protected:
   //Paramaters
   ERTelescopeSetup* fQTelescopeSetup = nullptr; ///< access to ERTelescopeSetup class instance
@@ -135,7 +135,7 @@ protected:
                                     Double_t deadEloss, Double_t edepInThickStation, Double_t edepInThinStation,
                                     Double_t edepInThickStationCorrected, Double_t edepInThinStationCorrected,
                                     ERChannel channelOfThinStaion, ERChannel channelOfThickStation, 
-                                    std::map<TString, Double_t> activeDepositsList, TClonesArray& col);
+                                    std::map<TString, std::pair<Int_t, Double_t>> activeDepositsList, TClonesArray& col);
   ClassDef(ERTelescopePID, 1)
 };
 #endif
