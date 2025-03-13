@@ -22,5 +22,7 @@
 #pragma link C++ class ER2H_6LiEventHeader+;
 #pragma link C++ class ERDecay2H_3He3H+;
 #pragma link C++ class ER2H_3He3HEventHeader+;
+#pragma link C++ class ERDecay6He4He2nTransfer+;
+#pragma link C++ class ERDecay6He4He2nTransferEventHeader+;
 
 #endif
